@@ -1,0 +1,14 @@
+:root{--bg:#0f1724;--card:#0b1220;--accent:#6d28d9;--muted:#93a3b6;--text:#e6eef8}
+body{font-family:Inter, system-ui, Arial; background:var(--bg); color:var(--text); margin:0; padding:20px}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;margin-bottom:10px}
+.container{display:grid;grid-template-columns:1fr 380px;gap:20px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));padding:18px;border-radius:12px;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+h1,h2{margin:0 0 12px 0}
+.form label, .card label{display:block;margin-top:8px;color:var(--muted);font-size:13px}
+input, textarea, select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:#061022;color:var(--text);margin-top:6px;box-sizing:border-box}
+button{margin-top:12px;padding:10px 12px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),#3b82f6);color:white;font-weight:600;cursor:pointer}
+.bg{min-height:100vh}
+.flash{background:#3b1a5b;padding:8px;border-radius:8px;margin-bottom:10px;color:#ffd9ff}
+#msg{margin-top:10px;color:var(--muted)}
+#historial{max-height:420px;overflow:auto;font-size:13px;color:var(--muted)}
+.entry{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02)}

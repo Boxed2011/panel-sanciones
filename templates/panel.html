@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Panel - Sanciones</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg">
+  <div class="topbar">
+    <div>Logged as <strong>{{ user }}</strong></div>
+    <div><a href="/logout">Cerrar sesión</a></div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>Registrar sanción</h2>
+      <form id="sancionForm" onsubmit="return sendSancion(event)">
+        <label>Fecha</label>
+        <input id="fecha" type="datetime-local"/>
+
+        <label>Objetivo (usuario)</label>
+        <input id="objetivo" placeholder="@usuario o ID" required/>
+
+        <label>Acción</label>
+        <select id="accion">
+          <option value="sancionar">Sancionar</option>
+          <option value="desancionar">Quitar sanción</option>
+        </select>
+
+        <label>Motivo</label>
+        <textarea id="motivo" required></textarea>
+
+        <label>Gravedad</label>
+        <select id="gravedad">
+          <option>Baja</option>
+          <option selected>Media</option>
+          <option>Alta</option>
+          <option>Crítica</option>
+        </select>
+
+        <label>Conteo de sanciones (número)</label>
+        <input id="conteo" type="number" min="0" value="0"/>
+
+        <label>Pruebas (URLs o texto)</label>
+        <input id="pruebas" placeholder="Enlace a captura, mensaje, etc"/>
+
+        <button type="submit">Enviar sanción</button>
+      </form>
+      <div id="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Historial (últimas 20)</h2>
+      <div id="historial">Cargando...</div>
+    </div>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
