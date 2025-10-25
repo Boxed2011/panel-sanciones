@@ -66,6 +66,23 @@ except Exception as e:
     print(f"Error al inicializar la base de datos (puede que ya exista): {e}")
 
 
+# ----- ESTE ES EL BLOQUE NUEVO -----
+# Intentar crear usuario admin por defecto desde variables de entorno
+admin_user = os.getenv("DEFAULT_ADMIN_USER")
+admin_pass = os.getenv("DEFAULT_ADMIN_PASS")
+
+if admin_user and admin_pass:
+    print(f"Intentando crear usuario por defecto: {admin_user}")
+    created = create_user(admin_user, admin_pass)
+    if created:
+        print("Usuario por defecto CREADO CON ÉXITO.")
+    else:
+        print("Usuario por defecto ya existía, no se ha creado.")
+else:
+    print("No se encontraron variables DEFAULT_ADMIN_USER y DEFAULT_ADMIN_PASS, no se crea usuario.")
+# ----- FIN DEL BLOQUE NUEVO -----
+
+
 # -------------- Auth helpers (MODIFICADOS PARA NEON/POSTGRESQL) --------------
 def create_user(username, password):
     pw_hash = generate_password_hash(password)
