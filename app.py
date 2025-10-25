@@ -58,31 +58,6 @@ def init_db():
     conn.commit() # Guardar cambios
     conn.close()
 
-# Inicializa DB al arrancar si no existe
-# Esto creará las tablas en NEON la primera vez que arranque la app
-try:
-    init_db()
-except Exception as e:
-    print(f"Error al inicializar la base de datos (puede que ya exista): {e}")
-
-
-# ----- ESTE ES EL BLOQUE NUEVO -----
-# Intentar crear usuario admin por defecto desde variables de entorno
-admin_user = os.getenv("DEFAULT_ADMIN_USER")
-admin_pass = os.getenv("DEFAULT_ADMIN_PASS")
-
-if admin_user and admin_pass:
-    print(f"Intentando crear usuario por defecto: {admin_user}")
-    created = create_user(admin_user, admin_pass)
-    if created:
-        print("Usuario por defecto CREADO CON ÉXITO.")
-    else:
-        print("Usuario por defecto ya existía, no se ha creado.")
-else:
-    print("No se encontraron variables DEFAULT_ADMIN_USER y DEFAULT_ADMIN_PASS, no se crea usuario.")
-# ----- FIN DEL BLOQUE NUEVO -----
-
-
 # -------------- Auth helpers (MODIFICADOS PARA NEON/POSTGRESQL) --------------
 def create_user(username, password):
     pw_hash = generate_password_hash(password)
@@ -112,6 +87,31 @@ def verify_user(username, password):
     if row and check_password_hash(row["password_hash"], password):
         return True
     return False
+
+# ----- INICIALIZACIÓN DE LA APP -----
+# (ESTE BLOQUE SE HA MOVIDO AQUÍ)
+
+# 1. Inicializa las tablas de la DB
+try:
+    init_db()
+except Exception as e:
+    print(f"Error al inicializar la base de datos (puede que ya exista): {e}")
+
+# 2. Intenta crear el usuario admin por defecto
+admin_user = os.getenv("DEFAULT_ADMIN_USER")
+admin_pass = os.getenv("DEFAULT_ADMIN_PASS")
+
+if admin_user and admin_pass:
+    print(f"Intentando crear usuario por defecto: {admin_user}")
+    created = create_user(admin_user, admin_pass) # <-- Ahora 'create_user' ya existe
+    if created:
+        print("Usuario por defecto CREADO CON ÉXITO.")
+    else:
+        print("Usuario por defecto ya existía, no se ha creado.")
+else:
+    print("No se encontraron variables DEFAULT_ADMIN_USER y DEFAULT_ADMIN_PASS, no se crea usuario.")
+# ----- FIN DEL BLOQUE DE INICIALIZACIÓN -----
+
 
 # -------------- Routes --------------
 @app.route("/")
