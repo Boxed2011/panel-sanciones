@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import sqlite3
+# import sqlite3  <-- LO BORRAMOS
+import psycopg2 # <-- AÑADIDO
+import psycopg2.extras # <-- AÑADIDO
+from psycopg2 import errors as pg_errors # <-- AÑADIDO
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from dotenv import load_dotenv
@@ -8,70 +11,86 @@ from datetime import datetime
 
 load_dotenv()
 
-APP_SECRET = os.getenv("APP_SECRET", "cambia_esto_ya")  # cambiar en producción
-DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")  # obligatorio en .env o en variables de entorno
+APP_SECRET = os.getenv("APP_SECRET", "cambia_esto_ya")
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+# AÑADIMOS LA VARIABLE DE ENTORNO PARA LA BASE DE DATOS
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-DB_PATH = "database.db"
+# DB_PATH = "database.db" <-- LO BORRAMOS
 
 app = Flask(__name__)
 app.secret_key = APP_SECRET
 
-# -------------- DB helpers --------------
+# -------------- DB helpers (MODIFICADOS PARA NEON/POSTGRESQL) --------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    if not DATABASE_URL:
+        raise ValueError("No se encontró DATABASE_URL en las variables de entorno")
+    conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 def init_db():
     conn = get_db()
-    c = conn.cursor()
-    # Usuarios: id, username, password_hash, created_at
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    )
-    """)
-    # Sanciones: id, fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador, created_at
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS sanciones (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fecha TEXT,
-        objetivo TEXT,
-        accion TEXT,
-        motivo TEXT,
-        gravedad TEXT,
-        conteo INTEGER,
-        pruebas TEXT,
-        moderador TEXT,
-        created_at TEXT NOT NULL
-    )
-    """)
-    conn.commit()
+    # Usamos un cursor
+    with conn.cursor() as c:
+        # CAMBIAMOS "INTEGER PRIMARY KEY AUTOINCREMENT" por "SERIAL PRIMARY KEY"
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """)
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS sanciones (
+            id SERIAL PRIMARY KEY,
+            fecha TEXT,
+            objetivo TEXT,
+            accion TEXT,
+            motivo TEXT,
+            gravedad TEXT,
+            conteo INTEGER,
+            pruebas TEXT,
+            moderador TEXT,
+            created_at TEXT NOT NULL
+        )
+        """)
+    conn.commit() # Guardar cambios
     conn.close()
 
 # Inicializa DB al arrancar si no existe
-init_db()
+# Esto creará las tablas en NEON la primera vez que arranque la app
+try:
+    init_db()
+except Exception as e:
+    print(f"Error al inicializar la base de datos (puede que ya exista): {e}")
 
-# -------------- Auth helpers --------------
+
+# -------------- Auth helpers (MODIFICADOS PARA NEON/POSTGRESQL) --------------
 def create_user(username, password):
     pw_hash = generate_password_hash(password)
     conn = get_db()
     try:
-        conn.execute("INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+        with conn.cursor() as c:
+            # CAMBIAMOS "?" por "%s"
+            c.execute("INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s)",
                      (username, pw_hash, datetime.utcnow().isoformat()))
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    # CAMBIAMOS el tipo de error
+    except (psycopg2.IntegrityError, pg_errors.UniqueViolation):
+        conn.rollback() # Deshacer
         return False
     finally:
         conn.close()
 
 def verify_user(username, password):
     conn = get_db()
-    row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    # USAMOS DictCursor para poder hacer row["password_hash"]
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+        # CAMBIAMOS "?" por "%s"
+        c.execute("SELECT * FROM users WHERE username = %s", (username,))
+        row = c.fetchone()
     conn.close()
     if row and check_password_hash(row["password_hash"], password):
         return True
@@ -116,7 +135,6 @@ def send_sancion():
         return jsonify({"ok": False, "msg": "No autenticado"}), 401
 
     data = request.json
-    # campos esperados: fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador
     fecha = data.get("fecha") or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     objetivo = data.get("objetivo", "—")
     accion = data.get("accion", "sancionar")
@@ -126,14 +144,18 @@ def send_sancion():
     pruebas = data.get("pruebas", "")
     moderador = session.get("user")
 
-    # Guardar en DB
+    # Guardar en DB (MODIFICADO)
     conn = get_db()
-    conn.execute("""
-        INSERT INTO sanciones (fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador, datetime.utcnow().isoformat()))
-    conn.commit()
-    conn.close()
+    try:
+        with conn.cursor() as c:
+            # CAMBIAMOS los "?" por "%s"
+            c.execute("""
+                INSERT INTO sanciones (fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (fecha, objetivo, accion, motivo, gravedad, conteo, pruebas, moderador, datetime.utcnow().isoformat()))
+        conn.commit()
+    finally:
+        conn.close()
 
     # Enviar al webhook de Discord como embed
     if not DISCORD_WEBHOOK:
@@ -169,12 +191,15 @@ def api_sanciones():
     if not session.get("user"):
         return jsonify({"ok": False, "msg": "No autenticado"}), 401
     conn = get_db()
-    rows = conn.execute("SELECT * FROM sanciones ORDER BY id DESC").fetchall()
+    # USAMOS DictCursor
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+        c.execute("SELECT * FROM sanciones ORDER BY id DESC")
+        rows = c.fetchall()
     conn.close()
     data = [dict(r) for r in rows]
     return jsonify({"ok": True, "data": data})
 
-# CLI helper para crear user desde terminal (si corres python app.py create_user)
+# CLI helper para crear user desde terminal
 if __name__ == "__main__":
     import sys
     if len(sys.argv) >= 2 and sys.argv[1] == "create_user":
@@ -189,5 +214,7 @@ if __name__ == "__main__":
         else:
             print("Error: usuario ya existe.")
         sys.exit(0)
-
+    
+    # Esta parte solo se usa para pruebas locales, Render usará gunicorn
+    print("Para producción, usa 'gunicorn app:app'")
     app.run(host="0.0.0.0", port=5000, debug=True)
